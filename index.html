@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Emulador Python Interativo</title>
   <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
     body {
@@ -40,6 +41,8 @@
       padding: 10px;
       font-size: 14px;
       resize: vertical;
+      white-space: pre;
+      tab-size: 4;
     }
     #output {
       white-space: pre-wrap;
@@ -50,6 +53,9 @@
       border: 1px solid #333;
       min-height: 150px;
       font-size: 14px;
+    }
+    #output.error {
+      color: #ff4444;
     }
     button {
       background-color: #00ff99;
@@ -84,9 +90,11 @@
       padding: 5px;
       border-bottom: 1px solid #333;
       cursor: pointer;
+      color: #bbb;
     }
     .history-item:hover {
       background: #2a2a2a;
+      color: #00ff99;
     }
     footer {
       text-align: center;
@@ -123,7 +131,7 @@
   <script>
     let pyodideReady = false;
     let pyodide = null;
-    let history = [];
+    let history = JSON.parse(localStorage.getItem("codeHistory") || "[]");
 
     async function loadPyodideInterpreter() {
       document.getElementById("loader").style.display = "inline";
@@ -133,49 +141,58 @@
     }
 
     loadPyodideInterpreter();
+    renderHistory();
 
     async function runCode() {
-  const editor = document.getElementById("editor");
-  const output = document.getElementById("output");
-  const code = editor.value;
+      const editor = document.getElementById("editor");
+      const output = document.getElementById("output");
+      const code = editor.value;
 
-  if (!pyodideReady) {
-    output.textContent = "⚠️ O interpretador ainda está carregando...";
-    return;
-  }
+      if (!pyodideReady) {
+        output.textContent = "⚠️ O interpretador ainda está carregando...";
+        return;
+      }
 
-  output.textContent = ""; // limpa output anterior
+      output.classList.remove("error");
+      output.textContent = "";
 
-  try {
-    let captured = [];
+      try {
+        // Input customizado com SweetAlert
+        pyodide.runPython(`
+import builtins
+from js import window
 
-    // Redireciona stdout e stderr
-    pyodide.setStdout({
-      batched: (s) => captured.push(s)
-    });
-    pyodide.setStderr({
-      batched: (s) => captured.push(s)
-    });
+def custom_input(prompt='Digite algo:'):
+    return window.prompt(prompt)
 
-    await pyodide.loadPackagesFromImports(code);
-    await pyodide.runPythonAsync(code);
+builtins.input = custom_input
+        `);
 
-    // Junta a saída
-    output.textContent = captured.join("").trim() || "(Código executado sem retorno)";
-    addToHistory(code);
-  } catch (err) {
-    output.textContent = "❌ Erro:\n" + err;
-  }
-}
+        let captured = [];
+        pyodide.setStdout({ batched: (s) => captured.push(s) });
+        pyodide.setStderr({ batched: (s) => captured.push(s) });
 
+        await pyodide.loadPackagesFromImports(code);
+        await pyodide.runPythonAsync(code);
+
+        output.textContent = captured.join("\n").trim() || "(Código executado sem retorno)";
+        addToHistory(code);
+      } catch (err) {
+        output.classList.add("error");
+        output.textContent = "❌ Erro:\n" + err;
+      }
+    }
 
     function clearOutput() {
-      document.getElementById("output").textContent = "";
+      const output = document.getElementById("output");
+      output.classList.remove("error");
+      output.textContent = "";
     }
 
     function addToHistory(code) {
       if (!code.trim()) return;
       history.push(code);
+      localStorage.setItem("codeHistory", JSON.stringify(history));
       renderHistory();
     }
 
@@ -192,6 +209,16 @@
         container.appendChild(div);
       });
     }
+
+    document.getElementById("editor").addEventListener("keydown", function(e) {
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        this.value = this.value.substring(0, start) + "    " + this.value.substring(end);
+        this.selectionStart = this.selectionEnd = start + 4;
+      }
+    });
   </script>
 </body>
 </html>
