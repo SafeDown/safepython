@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Emulador Python Interativo</title>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: #121212;
+      color: #e0e0e0;
+      font-family: 'Fira Code', monospace;
+      padding: 20px;
+      margin: 0;
+    }
+    header {
+      text-align: center;
+      padding: 10px;
+      background: #1f1f1f;
+      border-bottom: 1px solid #333;
+    }
+    header h1 {
+      margin: 0;
+      color: #00ff99;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 900px;
+      margin: auto;
+    }
+    #editor {
+      width: 100%;
+      height: 250px;
+      background: #1e1e2f;
+      color: #00ff99;
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+      resize: vertical;
+    }
+    #output {
+      white-space: pre-wrap;
+      background: #000;
+      color: #00ff99;
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      min-height: 150px;
+      font-size: 14px;
+    }
+    button {
+      background-color: #00ff99;
+      color: #000;
+      font-weight: bold;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background-color: #00cc77;
+    }
+    .buttons {
+      display: flex;
+      gap: 10px;
+    }
+    #loader {
+      color: #ffcc00;
+    }
+    #history {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      padding: 10px;
+      border-radius: 8px;
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 13px;
+    }
+    .history-item {
+      padding: 5px;
+      border-bottom: 1px solid #333;
+      cursor: pointer;
+    }
+    .history-item:hover {
+      background: #2a2a2a;
+    }
+    footer {
+      text-align: center;
+      margin-top: 30px;
+      color: #555;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><i class="fas fa-terminal"></i> Emulador Python Interativo</h1>
+  </header>
+
+  <div class="container">
+    <textarea id="editor" placeholder="# Digite seu código Python aqui...\nprint('Olá, Python na web!')"></textarea>
+
+    <div class="buttons">
+      <button onclick="runCode()"><i class="fas fa-play"></i> Executar</button>
+      <button onclick="clearOutput()"><i class="fas fa-eraser"></i> Limpar Saída</button>
+    </div>
+
+    <div id="loader">⏳ Carregando interpretador Python...</div>
+    <div id="output">Saída do terminal aparecerá aqui...</div>
+
+    <h3>🕘 Histórico de Execuções</h3>
+    <div id="history"></div>
+  </div>
+
+  <footer>
+    Desenvolvido com 💚 por um visionário em HTML + Pyodide + JS
+  </footer>
+
+  <script>
+    let pyodideReady = false;
+    let pyodide = null;
+    let history = [];
+
+    async function loadPyodideInterpreter() {
+      document.getElementById("loader").style.display = "inline";
+      pyodide = await loadPyodide();
+      pyodideReady = true;
+      document.getElementById("loader").style.display = "none";
+    }
+
+    loadPyodideInterpreter();
+
+    async function runCode() {
+  const editor = document.getElementById("editor");
+  const output = document.getElementById("output");
+  const code = editor.value;
+
+  if (!pyodideReady) {
+    output.textContent = "⚠️ O interpretador ainda está carregando...";
+    return;
+  }
+
+  output.textContent = ""; // limpa output anterior
+
+  try {
+    let captured = [];
+
+    // Redireciona stdout e stderr
+    pyodide.setStdout({
+      batched: (s) => captured.push(s)
+    });
+    pyodide.setStderr({
+      batched: (s) => captured.push(s)
+    });
+
+    await pyodide.loadPackagesFromImports(code);
+    await pyodide.runPythonAsync(code);
+
+    // Junta a saída
+    output.textContent = captured.join("").trim() || "(Código executado sem retorno)";
+    addToHistory(code);
+  } catch (err) {
+    output.textContent = "❌ Erro:\n" + err;
+  }
+}
+
+
+    function clearOutput() {
+      document.getElementById("output").textContent = "";
+    }
+
+    function addToHistory(code) {
+      if (!code.trim()) return;
+      history.push(code);
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const container = document.getElementById("history");
+      container.innerHTML = "";
+      history.slice().reverse().forEach((item, index) => {
+        const div = document.createElement("div");
+        div.className = "history-item";
+        div.textContent = item.length > 100 ? item.slice(0, 100) + "..." : item;
+        div.onclick = () => {
+          document.getElementById("editor").value = item;
+        };
+        container.appendChild(div);
+      });
+    }
+  </script>
+</body>
+</html>
